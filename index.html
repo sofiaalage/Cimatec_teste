@@ -1,0 +1,1989 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="Dashboard de Energia Eólica Offshore do Brasil - Análise de potencial energético marítimo">
+  <meta name="author" content="Sofia - Projeto ArcGIS">
+  <title>Dashboard Energia Eólica Offshore — Brasil</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.26/esri/themes/light/main.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+  <style>
+    html,body,#viewDiv{height:100%;margin:0;padding:0;font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;}
+    /* ========== LAYOUT DINÂMICO - ELEMENTOS SE AJUSTAM AO PAINEL ========== */
+    
+    /* Painel lateral - fixo no canto direito */
+    #panel{
+      position:absolute;
+      right:0;
+      top:0;
+      width:350px;
+      height:100%;
+      background:#f8f9fa;
+      box-shadow:-2px 0 20px rgba(0,0,0,0.1);
+      overflow:auto;
+      padding:0;
+      z-index:99;
+      display:flex;
+      flex-direction:column;
+      transition: transform 0.3s ease;
+    }
+    #panel[hidden]{
+      transform: translateX(100%);
+    }
+
+    /* Termômetro - superior esquerdo, abaixo do zoom */
+    #thermo{
+      position:absolute;
+      left:20px;
+      top:100px;
+      width:56px;
+      background:white;
+      border:1px solid #e9ecef;
+      box-shadow:0 4px 20px rgba(0,0,0,0.1);
+      border-radius:12px;
+      z-index:120;
+      padding:10px 8px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap:8px;
+      font-size:12px;
+    }
+
+    /* Toolbar - centro superior */
+    #toolbar{
+      position:absolute;
+      top:20px;
+      left:50%;
+      transform:translateX(-50%);
+      z-index:100;
+      background:white;
+      padding:12px 16px;
+      border-radius:12px;
+      box-shadow:0 4px 20px rgba(0,0,0,0.1);
+      display:flex;
+      gap:8px;
+      align-items:center;
+      border:1px solid #e9ecef;
+      flex-wrap: wrap;
+    }
+
+    /* Botões de zoom personalizados - movidos para não conflitar */
+    #customZoomControls {
+      position: absolute;
+      top: 80px;
+      right: 20px;
+      z-index: 180;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    
+    .zoom-btn {
+      width: 30px;
+      height: 30px;
+      background: white;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: bold;
+      color: #333;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: background 0.2s;
+    }
+    
+    .zoom-btn:hover {
+      background: #f0f0f0;
+    }
+
+    /* Error box - acima do toolbar */
+    #errorBox{
+      position:absolute;
+      left:20px;
+      bottom:100px;
+      z-index:200;
+      background:#fff3cd;
+      color:#664d03;
+      border:1px solid #ffecb5;
+      padding:12px 16px;
+      border-radius:8px;
+      max-width:60%;
+      display:none;
+      font-size:13px;
+    }
+
+    /* Loading - centro da tela */
+    #loadingDiv{
+      position:absolute;
+      top:50%;
+      left:50%;
+      transform:translate(-50%,-50%);
+      background:white;
+      padding:30px 40px;
+      border-radius:12px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.15);
+      z-index:1000;
+      text-align:center;
+      font-weight:500;
+      color:#2c3e50;
+    }
+
+    /* Controles do toolbar - tamanho aumentado */
+    #toolbar label{
+      font-size:13px;
+      font-weight:500;
+      color:#495057;
+      display:flex;
+      align-items:center;
+      gap:6px;
+      white-space:nowrap;
+    }
+    
+    #toolbar select{
+      padding:8px 10px;
+      border:1px solid #dee2e6;
+      border-radius:6px;
+      font-size:13px;
+      background:white;
+      color:#495057;
+      min-width:100px;
+    }
+    .panel-header{background:#2c3e50;color:white;padding:20px;text-align:center;box-shadow:0 2px 10px rgba(0,0,0,0.1);}
+    .panel-header h3{margin:0;font-size:18px;font-weight:600;}
+    .cards-container{padding:20px;display:flex;flex-direction:column;gap:15px;}
+    .info-card{background:white;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:1px solid #e9ecef;display:flex;align-items:center;gap:12px;transition:transform 0.2s, box-shadow 0.2s;}
+    .info-card:hover{transform:translateY(-2px);box-shadow:0 4px 15px rgba(0,0,0,0.12);}
+    .card-icon{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px;color:white;}
+    .icon-location,.icon-height,.icon-wind,.icon-power{background:#2c3e50;}
+    .card-content{flex:1;}
+    .card-title{font-size:12px;color:#6c757d;margin:0 0 4px 0;text-transform:uppercase;letter-spacing:0.5px;font-weight:500;}
+    .card-value{font-size:16px;font-weight:600;color:#2c3e50;margin:0;}
+    .wind-rose-section{background:white;border-radius:12px;margin:0 20px 20px 20px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,0.08);border:1px solid #e9ecef;}
+    .wind-rose-header{text-align:center;margin-bottom:15px;}
+    .wind-rose-title{font-size:14px;font-weight:600;color:#2c3e50;margin:0 0 5px 0;}
+    .wind-rose-subtitle{font-size:11px;color:#6c757d;margin:0;}
+    .wind-rose-container{position:relative;width:280px;height:280px;margin:0 auto;}
+    .wind-rose-chart{width:100%;height:100%;}
+    .wind-rose-compass{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;}
+    .compass-label{position:absolute;font-size:12px;font-weight:600;color:#2c3e50;transform:translate(-50%, -50%);}
+    .compass-label.north{top:8px;left:50%;}.compass-label.south{bottom:8px;left:50%;}.compass-label.east{right:8px;top:50%;}.compass-label.west{left:8px;top:50%;}
+    .compass-label.ne{top:15%;right:15%;}.compass-label.nw{top:15%;left:15%;}.compass-label.se{bottom:15%;right:15%;}.compass-label.sw{bottom:15%;left:15%;}
+    .charts-section{background:white;padding:0;min-height:300px;}
+    .chart-carousel{position:relative;height:280px;overflow:hidden;}
+    .chart-slide{position:absolute;width:100%;height:100%;padding:20px;opacity:0;transform:translateX(100%);transition:all 0.3s;box-sizing:border-box;}
+    .chart-slide.active{opacity:1;transform:translateX(0);}
+    .chart-slide.prev{transform:translateX(-100%);}
+    .chart-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;}
+    .chart-title{font-size:14px;font-weight:600;color:#2c3e50;margin:0;}
+    .chart-subtitle{font-size:11px;color:#6c757d;}
+    .chart-canvas{width:100% !important;height:200px !important;}
+    .carousel-indicators{display:flex;justify-content:center;gap:8px;padding:15px;background:#f8f9fa;}
+    .indicator{width:8px;height:8px;border-radius:50%;background:#dee2e6;cursor:pointer;transition:background 0.2s;}
+    .indicator.active{background:#2c3e50;}
+    #thermo .thermo-title{font-weight:600;color:#2c3e50;text-align:center;font-size:11px;}
+    #thermo .thermo-bar{width:20px;height:140px;border-radius:10px;background:#f1f3f5;overflow:hidden;display:flex;align-items:flex-end;}
+    #thermo .thermo-fill{width:100%;height:0%;background:linear-gradient(180deg,#ff4d4d 0%,#ffd166 50%,#74c0fc 100%);transition:height .15s;}
+    #thermo .thermo-value{font-weight:600;color:#2c3e50;text-align:center;}
+
+    /* ========== BLUR SELETIVO: APENAS CAMADAS DE DADOS ========== */
+    /* Aplicar blur APENAS nas camadas que contêm dados de vento */
+    .wind-data-raster .esri-view .esri-view-surface canvas[data-layer-view]:not([data-reference="true"]) {
+      filter: blur(3px) contrast(1.5) saturate(1.3) !important;
+      mix-blend-mode: multiply !important;
+    }
+    
+    /* Garantir que camadas de referência geográfica NUNCA tenham blur */
+    .wind-data-raster .esri-view .esri-view-surface .esri-feature-layer[title*="Brasil"],
+    .wind-data-raster .esri-view .esri-view-surface .esri-feature-layer[title*="Estados"],
+    .wind-data-raster .esri-view .esri-view-surface .esri-feature-layer[title*="Referência"],
+    .wind-data-raster .esri-view .esri-view-surface .esri-feature-layer[title*="Países"],
+    .wind-data-raster .esri-view .esri-view-surface .esri-feature-layer[title*="milhas"],
+    .wind-data-raster .esri-view .esri-view-surface .esri-basemap-layer,
+    .wind-data-raster .esri-view .esri-view-surface .esri-graphics-layer {
+      filter: none !important;
+      mix-blend-mode: normal !important;
+      z-index: 1000 !important;
+      opacity: 1 !important;
+    }
+
+    /* Basemap sempre nítido */
+    .wind-data-raster .esri-view .esri-view-surface .esri-basemap {
+      filter: none !important;
+      mix-blend-mode: normal !important;
+      z-index: 10 !important;
+    }
+
+    /* Labels e textos sempre legíveis */
+    .wind-data-raster .esri-view .esri-view-surface .esri-text,
+    .wind-data-raster .esri-view .esri-view-surface text {
+      filter: none !important;
+      text-shadow: 2px 2px 4px rgba(255,255,255,0.9) !important;
+      font-weight: bold !important;
+      z-index: 2000 !important;
+    }
+
+    /* ========== WIDGETS ARCGIS - POSICIONAMENTO DINÂMICO ========== */
+    
+    /* Zoom widget - superior direito, alta prioridade */
+    .esri-view .esri-zoom {
+      position: absolute !important;
+      top: 20px !important;
+      right: 20px !important;
+      z-index: 200 !important;
+      display: block !important;
+      visibility: visible !important;
+    }
+
+    /* Home widget - abaixo do zoom */
+    .esri-view .esri-home {
+      position: absolute !important;
+      top: 120px !important;
+      right: 20px !important;
+      z-index: 190 !important;
+      display: block !important;
+      visibility: visible !important;
+    }
+
+    /* Legenda - inferior esquerdo */
+    .esri-view .esri-expand[aria-label*="egend"],
+    .esri-view .esri-expand .esri-legend,
+    .esri-view .esri-ui-bottom-left .esri-expand {
+      position: absolute !important;
+      bottom: 20px !important;
+      left: 20px !important;
+      z-index: 90 !important;
+    }
+
+    /* Attribution - footer direito mais discreto */
+    .esri-view .esri-attribution {
+      bottom: 0px !important;
+      right: 0px !important;
+      z-index: 80 !important;
+      font-size: 9px !important;
+      background: rgba(255,255,255,0.7) !important;
+      padding: 1px 3px !important;
+      border-radius: 2px !important;
+      opacity: 0.8 !important;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://js.arcgis.com/4.26/"></script>
+</head>
+<body>
+  <div id="viewDiv"></div>
+  <div id="loadingDiv">
+    <i class="fas fa-spinner fa-spin" style="font-size:24px;margin-bottom:10px;color:#2c3e50;"></i>
+    <div>Carregando mapa...</div>
+  </div>
+
+  <div id="toolbar">
+    <label><i class="fas fa-arrows-alt-v"></i>Altura:
+      <select id="heightSelect">
+        <option value="10">10 m</option><option value="50">50 m</option>
+        <option value="100" selected>100 m</option><option value="150">150 m</option><option value="200">200 m</option>
+      </select>
+    </label>
+    <label><i class="fas fa-gauge"></i>Métrica:
+      <select id="metricSelect">
+        <option value="velocidade">Velocidade</option>
+        <option value="potencia" selected>Potência</option>
+      </select>
+    </label>
+    <label><i class="fas fa-anchor"></i>Malha:
+      <select id="maritimeSelect">
+        <option value="">Todas</option>
+        <option value="12">12 Milhas</option>
+        <option value="24">24 Milhas</option>
+        <option value="200">200 Milhas</option>
+      </select>
+    </label>
+  </div>
+
+  <!-- Botões de zoom personalizados -->
+  <div id="customZoomControls">
+    <div class="zoom-btn" id="zoomInBtn" title="Zoom In">+</div>
+    <div class="zoom-btn" id="zoomOutBtn" title="Zoom Out">−</div>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="panel-header"><h3><i class="fas fa-map-marker-alt"></i> Ponto Selecionado</h3></div>
+    <div class="cards-container">
+      <div class="info-card"><div class="card-icon icon-location"><i class="fas fa-map-marker-alt"></i></div>
+        <div class="card-content"><p class="card-title">Lat/Long</p><p class="card-value" id="latlon">-</p></div></div>
+      <div class="info-card"><div class="card-icon icon-height"><i class="fas fa-arrows-alt-v"></i></div>
+        <div class="card-content"><p class="card-title">Altura</p><p class="card-value" id="height_field">100 m</p></div></div>
+      <div class="info-card"><div class="card-icon icon-wind"><i class="fas fa-wind"></i></div>
+        <div class="card-content"><p class="card-title">Velocidade Média</p><p class="card-value" id="mean_wind">- m/s</p></div></div>
+      <div class="info-card"><div class="card-icon icon-power"><i class="fas fa-bolt"></i></div>
+        <div class="card-content"><p class="card-title">Potencial Eólico</p><p class="card-value" id="power_density">- W/m²</p></div></div>
+    </div>
+
+    <div class="wind-rose-section" id="roseBlock">
+      <div class="wind-rose-header">
+        <h4 class="wind-rose-title">Rosa dos Ventos</h4>
+        <p class="wind-rose-subtitle">Distribuição direcional</p>
+      </div>
+      <div class="wind-rose-container">
+        <canvas id="windRoseChart" class="wind-rose-chart"></canvas>
+        <div class="wind-rose-compass">
+          <div class="compass-label north">N</div><div class="compass-label south">S</div>
+          <div class="compass-label east">E</div><div class="compass-label west">W</div>
+          <div class="compass-label ne">NE</div><div class="compass-label nw">NW</div>
+          <div class="compass-label se">SE</div><div class="compass-label sw">SW</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="charts-section">
+      <div class="chart-carousel">
+        <div class="chart-slide active">
+          <div class="chart-header"><h4 class="chart-title">Distribuição Weibull</h4><span class="chart-subtitle">Probabilidade (%)</span></div>
+          <canvas id="weibullChart" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-slide">
+          <div class="chart-header"><h4 class="chart-title">Perfil Horário</h4><span class="chart-subtitle">24 horas</span></div>
+          <canvas id="hourlyChart" class="chart-canvas"></canvas>
+        </div>
+        <div class="chart-slide">
+          <div class="chart-header"><h4 class="chart-title">Perfil Mensal</h4><span class="chart-subtitle">12 meses</span></div>
+          <canvas id="monthlyChart" class="chart-canvas"></canvas>
+        </div>
+      </div>
+      <div class="carousel-indicators">
+        <div class="indicator active" onclick="showChart(0)"></div>
+        <div class="indicator" onclick="showChart(1)"></div>
+        <div class="indicator" onclick="showChart(2)"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="errorBox"></div>
+
+  <div id="thermo" title="Valor no ponteiro">
+    <div class="thermo-title" id="thermoTitle">Potência 100 m</div>
+    <div class="thermo-bar"><div class="thermo-fill" id="thermoFill"></div></div>
+    <div class="thermo-value" id="thermoValue">—</div>
+  </div>
+
+<script>
+(function(){
+  let currentChart=0,lastClickData=null,heatmapLayer=null,view=null,legend=null;
+  let hasHeatmap=false,hasRose=false;
+  let maritimeBoundaries = null; // Camadas de malha marítima
+  let selectedBoundary = null;   // Malha selecionada atual
+
+  const state={metric:'potencia',height:'100',maritime:''};
+
+  // Camadas de vento
+  const windCompleteURL="https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/tabela_pivot/FeatureServer/0";
+  const windHeatmapURL ="https://services1.arcgis.com/ES2tr2pdpLX8YAbj/arcgis/rest/services/wind_heatmap_high_brasil_7c6b748e/FeatureServer/0";
+  const windRoseURL    ="https://services1.arcgis.com/ES2tr2pdpLX8YAbj/arcgis/rest/services/wind_rose_brasil_64a7e707/FeatureServer/0";
+
+  const weibullURL ="https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/weibull_points_brasil_6abace30/FeatureServer/0";
+  const hourlyURL  ="https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/hourly_points_brasil_a7f47ed7/FeatureServer/0";
+  const monthlyURL ="https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/monthly_points_brasil_c0cbae90/FeatureServer/0";
+
+  // Camadas de limites marítimos EPE com informação de estado
+  const maritimeURLs = {
+    '12': "https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/12mn/FeatureServer/0",
+    '24': "https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/24mn/FeatureServer/0", 
+    '200': "https://services1.arcgis.com/3vfP8yhHtRxh5Ojr/arcgis/rest/services/200mn/FeatureServer/0"
+  };
+
+  // Mapeamento de siglas para nomes completos dos estados
+  const estadosMap = {
+    'RS': 'Rio Grande do Sul', 'SC': 'Santa Catarina', 'PR': 'Paraná', 
+    'SP': 'São Paulo', 'RJ': 'Rio de Janeiro', 'ES': 'Espírito Santo',
+    'BA': 'Bahia', 'SE': 'Sergipe', 'AL': 'Alagoas', 'PE': 'Pernambuco',
+    'PB': 'Paraíba', 'RN': 'Rio Grande do Norte', 'CE': 'Ceará', 
+    'PI': 'Piauí', 'MA': 'Maranhão', 'PA': 'Pará', 'AP': 'Amapá'
+  };
+
+  // UI helpers
+  function showChart(index){
+    const slides=document.querySelectorAll('.chart-slide');
+    const indicators=document.querySelectorAll('.indicator');
+    slides.forEach((s,i)=>{s.classList.remove('active','prev'); if(i===index)s.classList.add('active'); else if(i<index)s.classList.add('prev');});
+    indicators.forEach((d,i)=>d.classList.toggle('active',i===index));
+    currentChart=index;
+  }
+  window.showChart=showChart;
+  function showError(msg){
+    console.error("🚨 ERRO:",msg);
+    const box=document.getElementById('errorBox'); 
+    if(box) {
+      box.style.display='block'; 
+      box.textContent=msg;
+    }
+    const loading=document.getElementById('loadingDiv'); if(loading) loading.style.display='none';
+  }
+  
+  function hideError(){
+    const box=document.getElementById('errorBox'); 
+    if(box) {
+      box.style.display='none';
+    }
+  }
+  function hideLoading(){const loading=document.getElementById('loadingDiv'); if(loading) loading.style.display='none';}
+
+  // Chart.js instances
+  let windRoseChart=null,weibullChart=null,hourlyChart=null,monthlyChart=null;
+
+  function destroyChart(ref){ if(ref){try{ref.destroy();}catch(_){} } }
+
+  function drawWeibullChartPDF(k,c){
+    // Gera bins de velocidade (m/s) e PDF em %
+    const vMax = Math.max(25, Math.round(3*c)); // limite razoável
+    const step = 0.5;
+    const bins = [];
+    const pdf  = [];
+    for(let v=0; v<=vMax; v+=step){
+      bins.push(v.toFixed(1));
+      const p = (k/c) * Math.pow(v/c, k-1) * Math.exp(-Math.pow(v/c, k)); // PDF
+      pdf.push(p*100*step); // aproxima a área por barra (em %)
+    }
+    const weibullCtx=document.getElementById('weibullChart');
+    if(!weibullCtx){showError("Elemento weibullChart não encontrado");return;}
+    const ctx=weibullCtx.getContext('2d');
+    destroyChart(weibullChart);
+    weibullChart=new Chart(ctx,{
+      type:'line',
+      data:{labels:bins,datasets:[{label:'Probabilidade (%)',data:pdf, borderColor:'#667eea', backgroundColor:'rgba(102,126,234,0.12)', fill:true, tension:0.35}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true, ticks:{callback:v=>v.toFixed(1)+'%'}}}}
+    });
+  }
+
+  function drawWeibullFallback(){
+    drawWeibullChartPDF(2.0,8.0);
+  }
+
+  function drawWindRosePolar(labels,values){
+    const windRoseCtx=document.getElementById('windRoseChart');
+    if(!windRoseCtx){showError("Elemento windRoseChart não encontrado");return;}
+    const ctx=windRoseCtx.getContext('2d');
+    destroyChart(windRoseChart);
+    windRoseChart=new Chart(ctx,{
+      type:'polarArea',
+      data:{labels,datasets:[{label:'Frequência (%)',data:values, backgroundColor:'#6F7DB4', borderColor:'#6F7DB4', borderWidth:1}]},
+      options:{responsive:true,maintainAspectRatio:true,plugins:{legend:{display:false}}, scales:{r:{beginAtZero:true, ticks:{display:true},angleLines:{display:true,color:'white',lineWidth:0.6},      grid:{color:'#eee'}
+}}}
+    });
+  }
+
+  function drawWindRoseFallback(){
+    const sectors = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+    const data = sectors.map(() => Math.random() * 8 + 2);
+    drawWindRosePolar(sectors,data);
+  }
+
+  function drawHourly(values){
+    const labels=Array.from({length:24},(_,i)=>i.toString().padStart(2,'0'));
+    const hourlyCtx=document.getElementById('hourlyChart');
+    if(!hourlyCtx){showError("Elemento hourlyChart não encontrado");return;}
+    const ctx=hourlyCtx.getContext('2d');
+    destroyChart(hourlyChart);
+    hourlyChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Velocidade (m/s)',data:values,borderColor:'#4facfe',backgroundColor:'rgba(79,172,254,0.12)',fill:true,tension:0.35}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  }
+
+  function drawMonthly(values){
+    const labels=['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const monthlyCtx=document.getElementById('monthlyChart');
+    if(!monthlyCtx){showError("Elemento monthlyChart não encontrado");return;}
+    const ctx=monthlyCtx.getContext('2d');
+    destroyChart(monthlyChart);
+    monthlyChart=new Chart(ctx,{type:'line',data:{labels,datasets:[{label:'Velocidade (m/s)',data:values,borderColor:'#43e97b',backgroundColor:'rgba(67,233,123,0.12)',fill:true,tension:0.35}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+  }
+
+  // Descoberta de campos por altura
+  function candidatesFor(base,height){
+    const H=String(height);
+    return [
+      `${base}${H}`,`${base}_${H}`,`${base}${H}m`,`${base}_${H}m`,
+      `${base}${H}M`,`${base}_${H}M`
+    ];
+  }
+  function findFieldByRegex(fields, patterns){
+    const U = fields.map(f=>f.toUpperCase());
+    for(const pat of patterns){
+      const re = new RegExp(pat,'i');
+      const idx = fields.findIndex(n=>re.test(n));
+      if(idx>=0) return fields[idx];
+      const idxU = U.findIndex(n=>re.test(n));
+      if(idxU>=0) return fields[idxU];
+    }
+    return null;
+  }
+
+  // Resolve k/c da Weibull
+  function resolveWeibullKC(attributes, height, fieldList){
+    const fields = fieldList || Object.keys(attributes);
+    const H = String(height);
+    // candidatos para k e c
+    const tryK = [
+      ...candidatesFor('k',H),
+      ...candidatesFor('weibull_k',H),
+      ...candidatesFor('shape',H)
+    ].map(x=>`^${x}$`);
+    const tryC = [
+      ...candidatesFor('c',H),
+      ...candidatesFor('weibull_c',H),
+      ...candidatesFor('scale',H),
+      ...candidatesFor('A',H) // alguns datasets usam A para escala
+    ].map(x=>`^${x}$`);
+    // sem sufixo (k, c)
+    tryK.push('^k$','^weibull_k$','^shape$');
+    tryC.push('^c$','^weibull_c$','^scale$','^A$');
+
+    const kField = findFieldByRegex(fields, tryK);
+    const cField = findFieldByRegex(fields, tryC);
+    const k = kField!=null ? Number(attributes[kField]) : NaN;
+    const c = cField!=null ? Number(attributes[cField]) : NaN;
+    return {k, c, kField, cField};
+  }
+
+  // Resolve 16 setores da rosa (com ou sem prefixo/sufixo)
+  const ROSE_SECTORS=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  function resolveRoseFields(attributes, height){
+    const fields = Object.keys(attributes);
+    const H = String(height);
+    const out = {};
+    // padrões possíveis: N, n, freq_N, FREQ_N_100, N100, N_100m, etc.
+    for(const dir of ROSE_SECTORS){
+      const pats = [
+        `^${dir}$`, `^${dir}_${H}$`, `^${dir}${H}$`, `^${dir}_${H}m$`, `^${dir}${H}m$`,
+        `^FREQ_${dir}$`, `^FREQ_${dir}_${H}$`, `^FREQ_${dir}${H}$`, `^FREQ_${dir}_${H}m$`,
+        `^F_${dir}$`, `^F_${dir}_${H}$`,
+        `^${dir}_FREQ$`, `^${dir}_PCT$`, `^PCT_${dir}$`
+      ];
+      const f = findFieldByRegex(fields, pats);
+      out[dir] = f ? Number(attributes[f]) : null;
+    }
+    // Se muitos nulos, tente nomes curtos em minúsculo
+    const nulls = Object.values(out).filter(v=>v==null).length;
+    if(nulls>8){
+      for(const dir of ROSE_SECTORS){
+        if(out[dir]==null){
+          const f2 = findFieldByRegex(fields, [`^${dir.toLowerCase()}(_${H})?$`]);
+          if(f2) out[dir] = Number(attributes[f2]);
+        }
+      }
+    }
+    return out;
+  }
+
+  // Campos WS / POWER no Complete
+  const HEIGHTS=["10","50","100","150","200"];
+  const fldIndex={WS:{},POWER:{}};
+  function resolveFieldGeneric(fields, base, h){
+    const U=fields.map(n=>n.toUpperCase());
+    const cands=[`${base}${h}`,`${base}_${h}`,`${base}${h}m`,`${base}_${h}m`];
+    for(const c of cands){const i=U.indexOf(c.toUpperCase()); if(i>=0) return fields[i];}
+    const aliases = base==="POWER" ? ["POWER","PWR","PD","POWERDENS","POWER_DENS"] : [base];
+    for(const a of aliases){const re=new RegExp(`^${a}_?${h}\\b`,"i"); const f=fields.find(n=>re.test(n)); if(f) return f;}
+    // fallback: qualquer campo que contenha base e altura
+    const re2=new RegExp(`${base}.*${h}`,"i"); const f2=fields.find(n=>re2.test(n));
+    if(f2) return f2;
+    return null;
+  }
+  function buildFieldMapFrom(fields){
+    HEIGHTS.forEach(h=>{
+      fldIndex.WS[h]=resolveFieldGeneric(fields,"WS",h);
+      fldIndex.POWER[h]=resolveFieldGeneric(fields,"POWER",h) || resolveFieldGeneric(fields,"PWR",h) || resolveFieldGeneric(fields,"PD",h);
+    });
+  }
+  function fieldFor(metric,height){return metric==='potencia' ? (fldIndex.POWER[height]||null) : (fldIndex.WS[height]||null);}
+
+  // Renderers com diferentes tipos de visualização
+  function makeColorRenderer(field,metric,visualMode='heatmap',opt={}){
+    // Cores para diferentes modos
+    let colors;
+    
+    if (visualMode === 'heatmap-custom') {
+      // Cores mais vibrantes e opacas para heatmap
+      colors = {
+        low: [0,0,255,0.6],        // Azul puro
+        lowMed: [0,255,0,0.6],     // Verde puro  
+        med: [255,255,0,0.6],      // Amarelo puro
+        medHigh: [255,165,0,0.7],  // Laranja puro
+        high: [255,0,0,0.8]        // Vermelho puro
+      };
+    } else {
+      // Cores suaves para efeito contínuo
+      colors = {
+        low: [59,76,192,0.8],      // Azul
+        lowMed: [68,166,198,0.8],  // Azul claro
+        med: [142,203,135,0.8],    // Verde
+        medHigh: [253,208,92,0.8], // Amarelo
+        high: [204,76,2,0.8]       // Vermelho
+      };
+    }
+
+    if (visualMode === 'points-small') {
+      // Pontos pequenos tradicionais
+      const CL_V=[{minValue:0,maxValue:3,symbol:{type:"simple-marker",size:4,color:colors.low,outline:{width:0.5,color:"white"}},label:"0-5% (< 3 m/s)"},
+                  {minValue:3,maxValue:4.5,symbol:{type:"simple-marker",size:5,color:colors.lowMed,outline:{width:0.5,color:"white"}},label:"5-15% (3-4.5 m/s)"},
+                  {minValue:4.5,maxValue:7,symbol:{type:"simple-marker",size:6,color:colors.med,outline:{width:0.5,color:"white"}},label:"15-30% (4.5-7 m/s)"},
+                  {minValue:7,maxValue:10,symbol:{type:"simple-marker",size:7,color:colors.medHigh,outline:{width:0.5,color:"white"}},label:"30-50% (7-10 m/s)"},
+                  {minValue:10,maxValue:50,symbol:{type:"simple-marker",size:8,color:colors.high,outline:{width:0.5,color:"white"}},label:"50%+ (>10 m/s)"}];
+      const CL_P=[{minValue:0,maxValue:50,symbol:{type:"simple-marker",size:4,color:colors.low,outline:{width:0.5,color:"white"}},label:"0-5% (< 50 W/m²)"},
+                  {minValue:50,maxValue:150,symbol:{type:"simple-marker",size:5,color:colors.lowMed,outline:{width:0.5,color:"white"}},label:"5-15% (50-150 W/m²)"},
+                  {minValue:150,maxValue:300,symbol:{type:"simple-marker",size:6,color:colors.med,outline:{width:0.5,color:"white"}},label:"15-30% (150-300 W/m²)"},
+                  {minValue:300,maxValue:500,symbol:{type:"simple-marker",size:7,color:colors.medHigh,outline:{width:0.5,color:"white"}},label:"30-50% (300-500 W/m²)"},
+                  {minValue:500,maxValue:2000,symbol:{type:"simple-marker",size:8,color:colors.high,outline:{width:0.5,color:"white"}},label:"50%+ (>500 W/m²)"}];
+      if(metric==="velocidade"){return {type:"class-breaks",field, classBreakInfos:CL_V};}
+      if(field){return {type:"class-breaks",field, classBreakInfos:CL_P};}
+    } else if (visualMode === 'heatmap-custom') {
+      // Renderer contínuo com interpolação de cores
+      if(metric==="velocidade" && field){
+        return {
+          type: "simple",
+          symbol: {
+            type: "simple-marker",
+            size: 12,
+            outline: { width: 0 }
+          },
+          visualVariables: [{
+            type: "color",
+            field: field,
+            stops: [
+              { value: 0, color: [0,0,255,0.7], label: "0-5% (< 3 m/s)" },
+              { value: 3, color: [0,255,0,0.7], label: "5-15% (3-4.5 m/s)" },
+              { value: 4.5, color: [255,255,0,0.7], label: "15-30% (4.5-7 m/s)" },
+              { value: 7, color: [255,165,0,0.8], label: "30-50% (7-10 m/s)" },
+              { value: 10, color: [255,0,0,0.9], label: "50%+ (>10 m/s)" }
+            ]
+          }]
+        };
+      } else if(field) {
+        return {
+          type: "simple",
+          symbol: {
+            type: "simple-marker",
+            size: 12,
+            outline: { width: 0 }
+          },
+          visualVariables: [{
+            type: "color",
+            field: field,
+            stops: [
+              { value: 0, color: [0,0,255,0.7], label: "0-5% (< 50 W/m²)" },
+              { value: 50, color: [0,255,0,0.7], label: "5-15% (50-150 W/m²)" },
+              { value: 150, color: [255,255,0,0.7], label: "15-30% (150-300 W/m²)" },
+              { value: 300, color: [255,165,0,0.8], label: "30-50% (300-500 W/m²)" },
+              { value: 500, color: [255,0,0,0.9], label: "50%+ (>500 W/m²)" }
+            ]
+          }]
+        };
+      }
+      // Fallback para class-breaks se não conseguir usar visualVariables
+      const CL_V=[{minValue:0,maxValue:3,symbol:{type:"simple-marker",size:8,color:colors.low,outline:{width:0}},label:"0-5% (< 3 m/s)"},
+                  {minValue:3,maxValue:4.5,symbol:{type:"simple-marker",size:8,color:colors.lowMed,outline:{width:0}},label:"5-15% (3-4.5 m/s)"},
+                  {minValue:4.5,maxValue:7,symbol:{type:"simple-marker",size:8,color:colors.med,outline:{width:0}},label:"15-30% (4.5-7 m/s)"},
+                  {minValue:7,maxValue:10,symbol:{type:"simple-marker",size:8,color:colors.medHigh,outline:{width:0}},label:"30-50% (7-10 m/s)"},
+                  {minValue:10,maxValue:50,symbol:{type:"simple-marker",size:8,color:colors.high,outline:{width:0}},label:"50%+ (>10 m/s)"}];
+      const CL_P=[{minValue:0,maxValue:50,symbol:{type:"simple-marker",size:8,color:colors.low,outline:{width:0}},label:"0-5% (< 50 W/m²)"},
+                  {minValue:50,maxValue:150,symbol:{type:"simple-marker",size:8,color:colors.lowMed,outline:{width:0}},label:"5-15% (50-150 W/m²)"},
+                  {minValue:150,maxValue:300,symbol:{type:"simple-marker",size:8,color:colors.med,outline:{width:0}},label:"15-30% (150-300 W/m²)"},
+                  {minValue:300,maxValue:500,symbol:{type:"simple-marker",size:8,color:colors.medHigh,outline:{width:0}},label:"30-50% (300-500 W/m²)"},
+                  {minValue:500,maxValue:2000,symbol:{type:"simple-marker",size:8,color:colors.high,outline:{width:0}},label:"50%+ (>500 W/m²)"}];
+      if(metric==="velocidade"){return {type:"class-breaks",field, classBreakInfos:CL_V};}
+      if(field){return {type:"class-breaks",field, classBreakInfos:CL_P};}
+    } else {
+      // Pontos grandes para efeito mais contínuo
+      const CL_V=[{minValue:0,maxValue:3,symbol:{type:"simple-marker",size:20,color:colors.low,outline:{width:0}},label:"0-5% (< 3 m/s)"},
+                  {minValue:3,maxValue:4.5,symbol:{type:"simple-marker",size:20,color:colors.lowMed,outline:{width:0}},label:"5-15% (3-4.5 m/s)"},
+                  {minValue:4.5,maxValue:7,symbol:{type:"simple-marker",size:20,color:colors.med,outline:{width:0}},label:"15-30% (4.5-7 m/s)"},
+                  {minValue:7,maxValue:10,symbol:{type:"simple-marker",size:20,color:colors.medHigh,outline:{width:0}},label:"30-50% (7-10 m/s)"},
+                  {minValue:10,maxValue:50,symbol:{type:"simple-marker",size:20,color:colors.high,outline:{width:0}},label:"50%+ (>10 m/s)"}];
+      const CL_P=[{minValue:0,maxValue:50,symbol:{type:"simple-marker",size:20,color:colors.low,outline:{width:0}},label:"0-5% (< 50 W/m²)"},
+                  {minValue:50,maxValue:150,symbol:{type:"simple-marker",size:20,color:colors.lowMed,outline:{width:0}},label:"5-15% (50-150 W/m²)"},
+                  {minValue:150,maxValue:300,symbol:{type:"simple-marker",size:20,color:colors.med,outline:{width:0}},label:"15-30% (150-300 W/m²)"},
+                  {minValue:300,maxValue:500,symbol:{type:"simple-marker",size:20,color:colors.medHigh,outline:{width:0}},label:"30-50% (300-500 W/m²)"},
+                  {minValue:500,maxValue:2000,symbol:{type:"simple-marker",size:20,color:colors.high,outline:{width:0}},label:"50%+ (>500 W/m²)"}];
+      if(metric==="velocidade"){return {type:"class-breaks",field, classBreakInfos:CL_V};}
+      if(field){return {type:"class-breaks",field, classBreakInfos:CL_P};}
+    }
+    
+    const wsField=opt.wsFieldForPower;
+    if(wsField){
+      return {type:"class-breaks",
+              valueExpression:`var v=$feature["${wsField}"]; IIf(IsEmpty(v), null, 0.5 * 1.225 * v * v * v)`,
+              classBreakInfos:CL_P};
+    }
+    return {type:"class-breaks", field:"OBJECTID", classBreakInfos:CL_P};
+  }
+  function rendererMax(r){const infos=r.classBreakInfos||[]; const maxs=infos.map(i=>i.maxValue??i.max??0); return maxs.length?Math.max(...maxs):1;}
+
+  // ABORDAGEM COMPLETAMENTE NOVA: CSS Filters + Blend Modes para efeito raster real
+  function createRasterVisualization(field, metric, sourceLayer, wsField) {
+    sourceLayer.visible = true;
+    sourceLayer.featureReduction = null;
+    
+    // Aplicar CSS personalizado para efeito blur/raster na camada
+    const layerElement = document.querySelector(`[data-layer-id="${sourceLayer.id}"]`);
+    
+    // Criar renderer com pontos pequenos mas com CSS que os transformará
+    if(metric === "velocidade" && field) {
+      sourceLayer.renderer = {
+        type: "simple",
+        symbol: {
+          type: "simple-marker",
+          size: 8, // Pontos pequenos - o CSS fará a mágica
+          outline: { width: 0 }
+        },
+        visualVariables: [{
+          type: "color",
+          field: field,
+          stops: [
+            { value: 0, color: [0,0,255,1] },      // Azul opaco
+            { value: 3, color: [0,255,0,1] },      // Verde opaco
+            { value: 4.5, color: [255,255,0,1] },  // Amarelo opaco
+            { value: 7, color: [255,165,0,1] },    // Laranja opaco
+            { value: 10, color: [255,0,0,1] }      // Vermelho opaco
+          ]
+        }]
+      };
+    } else if(field) {
+      sourceLayer.renderer = {
+        type: "simple",
+        symbol: {
+          type: "simple-marker",
+          size: 8,
+          outline: { width: 0 }
+        },
+        visualVariables: [{
+          type: "color",
+          field: field,
+          stops: [
+            { value: 0, color: [0,0,255,1] },      
+            { value: 50, color: [0,255,0,1] },     
+            { value: 150, color: [255,255,0,1] },  
+            { value: 300, color: [255,165,0,1] },  
+            { value: 500, color: [255,0,0,1] }     
+          ]
+        }]
+      };
+    }
+    
+    // Aplicar filtros CSS avançados após um delay para garantir que a camada carregou
+    setTimeout(() => {
+      applySelectiveBlurToDataLayers();
+      addCleanGeographicOverlay();
+    }, 1000);
+    
+    console.log('🎨 Nova abordagem: CSS filters + blend modes SELETIVOS para efeito raster');
+  }
+
+  // Função para aplicar blur APENAS nas camadas de dados de vento
+  function applySelectiveBlurToDataLayers() {
+    console.log('🎯 Aplicando blur seletivo APENAS nas camadas de dados...');
+    
+    // Adicionar classe CSS que ativa o blur seletivo
+    const viewDiv = document.getElementById('viewDiv');
+    if (viewDiv) {
+      viewDiv.classList.add('wind-data-raster');
+      console.log('✅ Classe wind-data-raster aplicada - blur ativo apenas nos dados!');
+    }
+  }
+
+  // Função para adicionar camada geográfica LIMPA por cima (sem blur)
+  function addCleanGeographicOverlay() {
+    console.log('🗺️ Adicionando overlay geográfico LIMPO...');
+    
+    require(["esri/layers/FeatureLayer"], function(FeatureLayer) {
+      
+      // Camada do Brasil - contorno limpo e nítido
+      const brazilOverlay = new FeatureLayer({
+        url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries_(Generalized)/FeatureServer/0",
+        definitionExpression: "COUNTRY = 'Brazil'",
+        renderer: {
+          type: "simple",
+          symbol: {
+            type: "simple-fill",
+            color: [0, 0, 0, 0], // Totalmente transparente
+            outline: {
+              color: [30, 30, 30, 1], // Preto sólido
+              width: 3 // Linha grossa para boa visibilidade
+            }
+          }
+        },
+        popupEnabled: false,
+        opacity: 1,
+        title: "Brasil - Referência LIMPA",
+        effect: "none" // Garantir que não tenha efeitos
+      });
+
+      // Camada dos estados - divisões internas limpas
+      const statesOverlay = new FeatureLayer({
+        url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Administrative_Divisions/FeatureServer/0", 
+        definitionExpression: "COUNTRY = 'Brazil'",
+        renderer: {
+          type: "simple",
+          symbol: {
+            type: "simple-fill", 
+            color: [0, 0, 0, 0], // Totalmente transparente
+            outline: {
+              color: [80, 80, 80, 0.8], // Cinza escuro
+              width: 1.5 // Linha média
+            }
+          }
+        },
+        popupEnabled: false,
+        opacity: 1,
+        title: "Estados - Referência LIMPA",
+        effect: "none"
+      });
+
+      // Adicionar ao webmap
+      if (typeof webmap !== 'undefined' && webmap) {
+        webmap.add(brazilOverlay);
+        webmap.add(statesOverlay);
+        console.log('✅ Overlays geográficos LIMPOS adicionados por cima!');
+        
+        // Garantir que fiquem no topo
+        setTimeout(() => {
+          try {
+            webmap.reorder(brazilOverlay, webmap.layers.length);
+            webmap.reorder(statesOverlay, webmap.layers.length);
+            console.log('🔝 Overlays reordenados para o topo - sempre visíveis!');
+          } catch(e) {
+            console.log('Reordenação automática não necessária');
+          }
+        }, 2000);
+      }
+
+    });
+  }
+
+  // Função para remover efeito raster
+  function removeRasterEffect() {
+    const viewDiv = document.getElementById('viewDiv');
+    if (viewDiv) {
+      viewDiv.classList.remove('wind-data-raster');
+      console.log('🔄 Efeito raster removido - pontos discretos');
+    }
+  }
+
+  // ABORDAGEM REVOLUCIONÁRIA: Canvas customizado sobreposto com interpolação real
+  function createCanvasRasterOverlay(field, metric, sourceLayer, wsField) {
+    // Primeiro, esconder a camada original e preparar dados
+    sourceLayer.visible = false;
+    
+    // Consultar todos os pontos visíveis na área atual
+    const extent = view.extent;
+    const query = {
+      geometry: extent,
+      returnGeometry: true,
+      outFields: [field],
+      where: `${field} IS NOT NULL`
+    };
+    
+    sourceLayer.queryFeatures(query).then(response => {
+      if (response.features && response.features.length > 0) {
+        createInterpolatedCanvas(response.features, field, metric);
+        
+        // Criar máscara apenas nas áreas com dados
+        createDataMask(response.features);
+      } else {
+        console.log('Nenhum dado encontrado para interpolação canvas');
+        // Fallback para renderer normal
+        sourceLayer.visible = true;
+      }
+    }).catch(err => {
+      console.error('Erro ao consultar dados para canvas:', err);
+      sourceLayer.visible = true;
+    });
+    
+    console.log('🎨 Canvas interpolado iniciado - gerando superfície raster real');
+  }
+
+  // Criar máscara para mostrar onde há dados
+  function createDataMask(features) {
+    // Remover máscara anterior se existir
+    const existingMask = document.getElementById('data-mask-overlay');
+    if(existingMask) existingMask.remove();
+    
+    // Criar elemento de máscara
+    const mask = document.createElement('div');
+    mask.id = 'data-mask-overlay';
+    mask.style.position = 'absolute';
+    mask.style.top = '0';
+    mask.style.left = '0';
+    mask.style.width = '100%';
+    mask.style.height = '100%';
+    mask.style.pointerEvents = 'none';
+    mask.style.zIndex = '5';
+    
+    // Calcular área de cobertura dos dados
+    const points = features.map(f => view.toScreen(f.geometry));
+    const minX = Math.min(...points.map(p => p.x)) - 50;
+    const maxX = Math.max(...points.map(p => p.x)) + 50;
+    const minY = Math.min(...points.map(p => p.y)) - 50;
+    const maxY = Math.max(...points.map(p => p.y)) + 50;
+    
+    // Aplicar máscara apenas na área com dados
+    mask.style.background = `
+      radial-gradient(ellipse ${maxX-minX}px ${maxY-minY}px at ${(minX+maxX)/2}px ${(minY+maxY)/2}px, 
+        rgba(255,255,255,0) 0%, 
+        rgba(255,255,255,0) 70%, 
+        rgba(255,255,255,0.3) 100%)
+    `;
+    
+    const viewDiv = document.getElementById('viewDiv');
+    viewDiv.appendChild(mask);
+    
+    console.log('🎯 Máscara de dados aplicada - efeito limitado à área com dados');
+  }
+
+  // Visual raster excepcional preservado - funções CSS removidas para simplificar
+  
+  // CAMADA OFICIAL - Recebe parâmetros diretamente
+  function addSimpleGeoLayerDirect(viewInstance, mapInstance) {
+    try {
+      console.log('🗺️ Adicionando referências com parâmetros diretos...');
+      
+      require(["esri/layers/FeatureLayer"], function(FeatureLayer) {
+        
+        // Camada de países - Brasil com linhas mais visíveis
+        const brazilLayer = new FeatureLayer({
+          url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries_(Generalized)/FeatureServer/0",
+          definitionExpression: "COUNTRY = 'Brazil'",
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill",
+              color: [0, 0, 0, 0], // Totalmente transparente
+              outline: {
+                color: [30, 30, 30, 1], // Preto escuro, 100% opaco
+                width: 3 // Linha mais grossa
+              }
+            }
+          },
+          popupEnabled: false,
+          opacity: 1,
+          title: "Brasil - Referência",
+          // IMPORTANTE: Evitar que o blur seja aplicado nesta camada
+          effect: "none"
+        });
+
+        // Camada de estados com linhas mais visíveis
+        const statesLayer = new FeatureLayer({
+          url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Administrative_Divisions/FeatureServer/0", 
+          definitionExpression: "COUNTRY = 'Brazil'",
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill", 
+              color: [0, 0, 0, 0], // Totalmente transparente
+              outline: {
+                color: [60, 60, 60, 0.9], // Cinza escuro mais opaco
+                width: 1.5 // Linha um pouco mais grossa
+              }
+            }
+          },
+          popupEnabled: false,
+          opacity: 1,
+          title: "Estados - Referência",
+          effect: "none" // Sem efeitos visuais
+        });
+
+        // Tentar adicionar usando mapInstance diretamente
+        if (mapInstance && typeof mapInstance.add === 'function') {
+          mapInstance.add(brazilLayer);
+          mapInstance.add(statesLayer);
+          console.log('✅ Camadas de referência com linhas reforçadas adicionadas!');
+        } else if (viewInstance && viewInstance.map && typeof viewInstance.map.add === 'function') {
+          viewInstance.map.add(brazilLayer);
+          viewInstance.map.add(statesLayer);
+          console.log('✅ Camadas de referência via viewInstance.map!');
+        } else {
+          console.warn('⚠️ Nenhuma instância de mapa disponível');
+        }
+
+      });
+
+    } catch (error) {
+      console.warn('⚠️ Erro ao carregar referências diretas:', error);
+    }
+  }
+
+  // Visual raster excepcional restaurado - versão limpa
+  function filterDataToMaritimeAreas() {
+    console.log('🌊 Aplicando filtro para mostrar dados apenas em áreas marítimas...');
+    
+    // Definir filtro espacial para 12, 24 e 200 milhas combinadas
+    const maritimeFilter = `
+      ST_INTERSECTS(shape, (
+        SELECT geometry FROM ${maritimeURLs['12']} 
+        UNION ALL 
+        SELECT geometry FROM ${maritimeURLs['24']} 
+        UNION ALL 
+        SELECT geometry FROM ${maritimeURLs['200']}
+      ))
+    `;
+    
+    // Aplicar filtro nas principais camadas de dados
+    if (windCompleteFL) {
+      windCompleteFL.definitionExpression = maritimeFilter;
+      console.log('✅ Filtro marítimo aplicado na camada principal');
+    }
+    
+    // Aplicar também nas outras camadas se existirem
+    if (typeof windRoseFL !== 'undefined' && windRoseFL) {
+      windRoseFL.definitionExpression = maritimeFilter;
+    }
+    
+    if (typeof weibullFL !== 'undefined' && weibullFL) {
+      weibullFL.definitionExpression = maritimeFilter;
+    }
+    
+    if (typeof wpdFL !== 'undefined' && wpdFL) {
+      wpdFL.definitionExpression = maritimeFilter;
+    }
+    
+    console.log('🎯 Dados filtrados: apenas áreas marítimas terão efeito raster!');
+  }
+  
+  // Função alternativa mais simples - busca camadas pelo map
+  function filterDataToMaritimeAreasSimple() {
+    console.log('🌊 Aplicando filtro marítimo expandido...');
+    
+    // Filtro expandido para área marítima brasileira mais ampla
+    const maritimeFilterExpanded = `
+      (latitude BETWEEN -40 AND 10) AND 
+      (longitude BETWEEN -60 AND -25)
+    `;
+    
+    // Buscar e aplicar filtro nas camadas através do webmap
+    setTimeout(() => {
+      try {
+        if (view && view.map && view.map.layers) {
+          view.map.layers.forEach(layer => {
+            // Aplicar filtro apenas nas camadas de dados de vento
+            if (layer && layer.url && 
+                (layer.url.includes('wind') || 
+                 layer.url.includes('complete') || 
+                 layer.url.includes('vento'))) {
+              
+              layer.definitionExpression = maritimeFilterExpanded;
+              console.log(`✅ Filtro marítimo EXPANDIDO aplicado na camada: ${layer.title || layer.id}`);
+            }
+          });
+          
+          console.log('🎯 Área marítima expandida - mais dados com efeito raster!');
+        }
+      } catch (error) {
+        console.warn('⚠️ Erro ao aplicar filtro marítimo:', error);
+      }
+    }, 1000);
+  }
+  function addSimpleGeoLayer() {
+    try {
+      console.log('🗺️ Adicionando camada de referências EMBAIXO...');
+      
+      require(["esri/layers/FeatureLayer"], function(FeatureLayer) {
+        
+        // Camada de países - Brasil apenas
+        const brazilLayer = new FeatureLayer({
+          url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Countries_(Generalized)/FeatureServer/0",
+          definitionExpression: "COUNTRY = 'Brazil'",
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill",
+              color: [0, 0, 0, 0], // Totalmente transparente
+              outline: {
+                color: [60, 60, 60, 0.8], // Cinza escuro para contorno
+                width: 2
+              }
+            }
+          },
+          popupEnabled: false,
+          opacity: 1,
+          title: "Brasil - Referência"
+        });
+
+        // Camada de estados brasileiros  
+        const statesLayer = new FeatureLayer({
+          url: "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/World_Administrative_Divisions/FeatureServer/0", 
+          definitionExpression: "COUNTRY = 'Brazil'",
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill", 
+              color: [0, 0, 0, 0], // Totalmente transparente
+              outline: {
+                color: [100, 100, 100, 0.6], // Cinza claro para estados
+                width: 1
+              }
+            }
+          },
+          popupEnabled: false,
+          opacity: 1,
+          title: "Estados - Referência"
+        });
+
+        // USAR WEBMAP EM VEZ DE VIEW.MAP
+        if (typeof webmap !== 'undefined' && webmap) {
+          webmap.add(brazilLayer);
+          webmap.add(statesLayer);
+          console.log('✅ Camadas de referência adicionadas via webmap!');
+        } else {
+          console.warn('⚠️ Webmap não disponível para referências');
+        }
+
+      });
+
+    } catch (error) {
+      console.warn('⚠️ Erro ao carregar referências:', error);
+    }
+  }
+
+  // Criar canvas com interpolação bilinear real
+  function createInterpolatedCanvas(features, field, metric) {
+    // Remover canvas anterior se existir
+    const existingCanvas = document.getElementById('raster-canvas-overlay');
+    if(existingCanvas) existingCanvas.remove();
+    
+    // Criar canvas sobreposto
+    const canvas = document.createElement('canvas');
+    canvas.id = 'raster-canvas-overlay';
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.pointerEvents = 'none';
+    canvas.style.zIndex = '10';
+    
+    const viewDiv = document.getElementById('viewDiv');
+    viewDiv.appendChild(canvas);
+    
+    const ctx = canvas.getContext('2d');
+    
+    // Ajustar resolução do canvas
+    const rect = viewDiv.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    
+    // Preparar dados para interpolação
+    const points = features.map(feature => {
+      const point = view.toScreen(feature.geometry);
+      const value = feature.attributes[field];
+      return { x: point.x, y: point.y, value: value };
+    }).filter(p => p.x >= 0 && p.x <= canvas.width && p.y >= 0 && p.y <= canvas.height);
+    
+    if(points.length === 0) return;
+    
+    // Função para interpolar valor em qualquer ponto usando IDW (Inverse Distance Weighting)
+    function interpolateValue(x, y) {
+      let weightSum = 0;
+      let valueSum = 0;
+      const power = 2;
+      
+      for(const point of points) {
+        const distance = Math.sqrt((x - point.x) ** 2 + (y - point.y) ** 2);
+        if(distance < 1) return point.value; // Se muito próximo, usar valor direto
+        
+        const weight = 1 / (distance ** power);
+        weightSum += weight;
+        valueSum += point.value * weight;
+      }
+      
+      return weightSum > 0 ? valueSum / weightSum : 0;
+    }
+    
+    // Função para converter valor em cor
+    function valueToColor(value) {
+      if(metric === "velocidade") {
+        if(value <= 0) return [0,0,255,0.6];      // Azul
+        if(value <= 3) return [0,255,0,0.7];      // Verde
+        if(value <= 4.5) return [255,255,0,0.8];  // Amarelo
+        if(value <= 7) return [255,165,0,0.8];    // Laranja
+        return [255,0,0,0.9];                     // Vermelho
+      } else {
+        if(value <= 0) return [0,0,255,0.6];
+        if(value <= 50) return [0,255,0,0.7];
+        if(value <= 150) return [255,255,0,0.8];
+        if(value <= 300) return [255,165,0,0.8];
+        return [255,0,0,0.9];
+      }
+    }
+    
+    // Gerar raster interpolado
+    const imageData = ctx.createImageData(canvas.width, canvas.height);
+    const step = 4; // Resolução (menor = mais detalhado, mas mais lento)
+    
+    for(let x = 0; x < canvas.width; x += step) {
+      for(let y = 0; y < canvas.height; y += step) {
+        const value = interpolateValue(x, y);
+        const color = valueToColor(value);
+        
+        // Pintar área ao redor do pixel para suavizar
+        for(let dx = 0; dx < step; dx++) {
+          for(let dy = 0; dy < step; dy++) {
+            const px = x + dx;
+            const py = y + dy;
+            if(px < canvas.width && py < canvas.height) {
+              const index = (py * canvas.width + px) * 4;
+              imageData.data[index] = color[0];     // R
+              imageData.data[index + 1] = color[1]; // G
+              imageData.data[index + 2] = color[2]; // B
+              imageData.data[index + 3] = color[3] * 255; // A
+            }
+          }
+        }
+      }
+    }
+    
+    ctx.putImageData(imageData, 0, 0);
+    
+    console.log('✨ Canvas raster interpolado gerado com sucesso!');
+  }
+
+  // App
+  require([
+    "esri/config","esri/WebMap","esri/views/MapView","esri/layers/FeatureLayer","esri/widgets/Legend","esri/widgets/Expand","esri/layers/ImageryLayer"
+  ], function(esriConfig,WebMap,MapView,FeatureLayer,Legend,Expand,ImageryLayer){
+    try{
+      // Prevenir execução múltipla
+      if(window.appInitialized) {
+        console.log('🔄 App já inicializado, ignorando execução duplicada');
+        return;
+      }
+      window.appInitialized = true;
+      
+      if(!esriConfig.request) esriConfig.request={};
+      if(!esriConfig.request.corsEnabledServers) esriConfig.request.corsEnabledServers=[];
+      esriConfig.request.corsEnabledServers.push("services1.arcgis.com");
+
+      const webmap=new WebMap({portalItem:{id:"1087b639b56d4244aea2ff1304fb487f"}});
+      
+      // Limpar container antes de criar nova view
+      const viewDiv = document.getElementById("viewDiv");
+      if(viewDiv) {
+        viewDiv.innerHTML = "";
+        // Remover elementos UI antigos
+        if(window.currentView) {
+          try {
+            window.currentView.destroy();
+          } catch(e) {
+            console.log('View anterior já removida');
+          }
+        }
+      }
+      
+      const view=new MapView({container:"viewDiv",map:webmap,center:[-40,-20],zoom:6});
+      window.currentView = view; // Salvar referência para limpeza futura
+      
+      // Layers principais (só os essenciais para evitar erros de autorização)
+      const hourlyFL   = new FeatureLayer({ url: hourlyURL,  visible:false, outFields:["*"] });
+      const weibullFL  = new FeatureLayer({ url: weibullURL, visible:false, outFields:["*"] });
+      const monthlyFL  = new FeatureLayer({ url: monthlyURL, visible:false, outFields:["*"] });
+      const windCompleteFL = new FeatureLayer({ url: windCompleteURL, visible:true, outFields:["*"] });
+
+      // Não carregar camadas externas problemáticas por enquanto
+      hasHeatmap = false;
+      hasRose = false;
+
+      // Camadas de limites marítimos
+      maritimeBoundaries = {
+        '12': new FeatureLayer({ 
+          url: maritimeURLs['12'], 
+          visible: false, 
+          outFields: ["*"],
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill",
+              color: [0, 0, 255, 0.1],
+              outline: { color: [0, 0, 255, 0.8], width: 2 }
+            }
+          }
+        }),
+        '24': new FeatureLayer({ 
+          url: maritimeURLs['24'], 
+          visible: false, 
+          outFields: ["*"],
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill", 
+              color: [0, 128, 255, 0.1],
+              outline: { color: [0, 128, 255, 0.8], width: 2 }
+            }
+          }
+        }),
+        '200': new FeatureLayer({ 
+          url: maritimeURLs['200'], 
+          visible: false, 
+          outFields: ["*"],
+          renderer: {
+            type: "simple",
+            symbol: {
+              type: "simple-fill",
+              color: [0, 255, 128, 0.1], 
+              outline: { color: [0, 255, 128, 0.8], width: 2 }
+            }
+          }
+        })
+      };
+
+      // Build field map for Complete
+      windCompleteFL.load().then(()=>{
+        buildFieldMapFrom(windCompleteFL.fields.map(f=>f.name));
+      });
+
+      // Carregar apenas camadas essenciais para evitar erros
+      Promise.allSettled([
+        hourlyFL.load(),
+        weibullFL.load(),
+        monthlyFL.load(),
+        windCompleteFL.load()
+      ]).then((res)=>{
+        console.log('📊 Camadas principais carregadas:', res);
+        const layers=[hourlyFL,weibullFL,monthlyFL,windCompleteFL];
+        
+        // Adicionar camadas marítimas
+        Object.values(maritimeBoundaries).forEach(layer => layers.push(layer));
+
+        webmap.addMany(layers);
+        
+        hideLoading();
+
+        console.log('🎨 Dashboard carregado - implementando blur seletivo CSS');
+        
+        // Blur CSS já está aplicado via classes CSS
+        // Sem necessidade de função JavaScript adicional
+
+        // Manter apenas o visual raster excepcional
+        console.log('🎯 Dashboard carregado com visual raster preservado');
+
+        // Limpar elementos UI anteriores para evitar conflitos
+        if(view.ui) {
+          try {
+            view.ui.empty("bottom-left");
+            // Garantir que o zoom widget esteja presente
+            if (!view.ui.find("zoom")) {
+              view.ui.add("zoom", "top-right");
+            }
+          } catch(e) {
+            console.log('UI já limpa');
+          }
+        }
+        
+        // Adicionar referências geográficas após view estar pronto
+        setTimeout(() => {
+          if (view && view.map) {
+            addSimpleGeoLayerDirect(view, webmap);
+            console.log('🗺️ Referências adicionadas após view estar pronto');
+          }
+        }, 3000);
+        
+        // Cache buster para forçar reload  
+        console.log('🔄 Cache version: 2025-09-14-v14-selective-blur-mask');
+        
+        let legend=new Legend({
+          view,
+          layerInfos:[{layer:windCompleteFL,title:"Escala"}],
+          id: "wind-legend-" + Date.now()
+        });
+        const ex=new Expand({
+          view,
+          content:legend,
+          expanded:false, // Começar fechado para não ocupar muito espaço
+          expandIconClass: "esri-icon-legend",
+          id: "legend-expand-" + Date.now()
+        });
+        view.ui.add(ex,"bottom-left");
+
+        // Estado inicial e listeners
+        const heightSelect=document.getElementById('heightSelect');
+        const metricSelect=document.getElementById('metricSelect');
+        
+        if(!heightSelect || !metricSelect){
+          showError("Elementos de controle não encontrados");
+          return;
+        }
+        state.height=heightSelect.value; state.metric=metricSelect.value; state.visualMode='heatmap';
+
+        function applyVisualization(){
+          const wsField=fldIndex.WS[state.height]||null;
+          const powField=fldIndex.POWER[state.height]||null;
+          const field=(state.metric==="potencia")?powField:wsField;
+          const visualMode = state.visualMode || 'heatmap';
+
+          windCompleteFL.visible=true;
+          
+          if (visualMode === 'heatmap') {
+            // CSS Raster Effects - blur SELETIVO apenas nos dados + overlay geográfico limpo
+            createRasterVisualization(field, state.metric, windCompleteFL, wsField);
+          } else if (visualMode === 'heatmap-canvas') {
+            // Canvas Interpolado - criar superfície raster real sobreposta
+            createCanvasRasterOverlay(field, state.metric, windCompleteFL, wsField);
+          } else if (visualMode === 'heatmap-blur') {
+            // Abordagem alternativa: pontos grandes sobrepostos para blur intenso
+            windCompleteFL.featureReduction = null;
+            if(state.metric === "velocidade" && field) {
+              windCompleteFL.renderer = {
+                type: "simple",
+                symbol: {
+                  type: "simple-marker",
+                  size: 50, // Pontos extremamente grandes
+                  outline: { width: 0 }
+                },
+                visualVariables: [{
+                  type: "color",
+                  field: field,
+                  stops: [
+                    { value: 0, color: [0,0,255,0.3] },      // Muito transparente
+                    { value: 3, color: [0,255,0,0.4] },      
+                    { value: 4.5, color: [255,255,0,0.5] },  
+                    { value: 7, color: [255,165,0,0.6] },    
+                    { value: 10, color: [255,0,0,0.7] }      
+                  ]
+                }]
+              };
+            } else if(field) {
+              windCompleteFL.renderer = {
+                type: "simple",
+                symbol: {
+                  type: "simple-marker",
+                  size: 50,
+                  outline: { width: 0 }
+                },
+                visualVariables: [{
+                  type: "color",
+                  field: field,
+                  stops: [
+                    { value: 0, color: [0,0,255,0.3] },      
+                    { value: 50, color: [0,255,0,0.4] },     
+                    { value: 150, color: [255,255,0,0.5] },  
+                    { value: 300, color: [255,165,0,0.6] },  
+                    { value: 500, color: [255,0,0,0.7] }     
+                  ]
+                }]
+              };
+            }
+          } else {
+            // Modos de pontos - remover efeito raster
+            removeRasterEffect();
+            const renderer = makeColorRenderer(field, state.metric, visualMode, {wsFieldForPower:wsField});
+            windCompleteFL.renderer = renderer;
+            windCompleteFL.featureReduction = null;
+          }
+
+          legend.layerInfos=[{layer:windCompleteFL,title:`Escala (${state.metric==='potencia'?'W/m²':'m/s'})`}];
+        }
+        applyVisualization();
+
+        heightSelect.addEventListener('change',function(){
+          state.height=this.value; 
+          const heightField = document.getElementById('height_field');
+          if(heightField) heightField.innerText=state.height+' m';
+          if(lastClickData) refreshChartsAt(lastClickData.mapPoint);
+          applyVisualization();
+        });
+        metricSelect.addEventListener('change',function(){ state.metric=this.value; applyVisualization(); });
+        
+        // Listener para seletor de malha marítima
+        const maritimeSelect = document.getElementById('maritimeSelect');
+        if(!maritimeSelect){
+          showError("Elemento maritimeSelect não encontrado");
+          return;
+        }
+        if(maritimeSelect) {
+          maritimeSelect.addEventListener('change', function() {
+            state.maritime = this.value;
+            updateMaritimeBoundaries();
+            // Limpar seleção anterior quando mudar tipo de malha
+            selectedBoundary = null;
+            const panel = document.getElementById('panel');
+            if(panel) panel.hidden = true;
+          });
+        }
+        
+        // Dashboard limpo e focado no visual raster excepcional
+        console.log('🎨 Dashboard focado no visual raster excepcional');
+
+        // Funções para filtro por malha marítima
+        function updateMaritimeBoundaries() {
+          // Ocultar todas as camadas de malha
+          Object.values(maritimeBoundaries).forEach(layer => layer.visible = false);
+          
+          // Mostrar apenas a camada selecionada
+          if (state.maritime && maritimeBoundaries[state.maritime]) {
+            maritimeBoundaries[state.maritime].visible = true;
+            console.log(`🌊 Exibindo malha ${state.maritime} milhas`);
+          }
+        }
+
+        function handleMaritimeClick(evt, maritimeType) {
+          console.log(`🌊 Clique na malha ${maritimeType} milhas`);
+          
+          // Consultar qual região/estado foi clicado na malha
+          const query = {
+            geometry: evt.mapPoint,
+            spatialRelationship: "intersects",
+            returnGeometry: true,
+            outFields: ["*"],
+            num: 1
+          };
+
+          maritimeBoundaries[maritimeType].queryFeatures(query).then(response => {
+            console.log(`📊 Resposta da consulta na malha:`, response);
+            
+            if (response.features && response.features.length > 0) {
+              const boundary = response.features[0];
+              selectedBoundary = boundary;
+              
+              console.log(`🎯 Região encontrada:`, boundary.attributes);
+              
+              // Destacar a região selecionada
+              highlightSelectedBoundary(boundary);
+              
+              // Filtrar pontos de vento dentro desta região
+              filterWindDataByBoundary(boundary, maritimeType);
+              
+            } else {
+              console.log("❌ Nenhuma região encontrada neste ponto");
+              showError("Nenhuma região marítima encontrada neste local");
+            }
+          }).catch(err => {
+            console.error("❌ Erro ao consultar malha:", err);
+            showError("Erro ao consultar região marítima");
+          });
+        }
+
+        function highlightSelectedBoundary(boundary) {
+          // TODO: Implementar destaque visual da região selecionada
+          // Por enquanto, apenas log
+          console.log("🔆 Destacando região:", boundary.attributes);
+        }
+
+        function filterWindDataByBoundary(boundary, maritimeType) {
+          console.log(`🔍 Filtrando pontos de vento na região...`);
+          
+          // Consultar pontos de vento que intersectam com a geometria da região
+          const query = {
+            geometry: boundary.geometry,
+            spatialRelationship: "intersects",
+            returnGeometry: true,
+            outFields: ["*"],
+            num: 2000 // Aumentar limite
+          };
+
+          windCompleteFL.queryFeatures(query).then(response => {
+            console.log(`📊 Resposta da consulta de pontos:`, response);
+            
+            if (response.features && response.features.length > 0) {
+              console.log(`✅ ${response.features.length} pontos encontrados na região`);
+              
+              // Calcular estatísticas agregadas da região
+              const stats = calculateRegionStats(response.features, state.height, state.metric);
+              
+              if (stats) {
+                // Exibir dashboard com dados da região
+                displayRegionDashboard(stats, boundary.attributes, maritimeType);
+                
+                // Mostrar painel
+                const panel = document.getElementById('panel');
+                if(panel) panel.hidden = false;
+              } else {
+                showError("Não foi possível calcular estatísticas para esta região");
+              }
+              
+            } else {
+              console.log("❌ Nenhum ponto de vento encontrado na região");
+              showError("Nenhum dado de vento encontrado nesta região marítima");
+            }
+          }).catch(err => {
+            console.error("❌ Erro ao filtrar dados por região:", err);
+            showError("Erro ao consultar dados da região");
+          });
+        }
+
+        function calculateRegionStats(features, height, metric) {
+          console.log(`🧮 Calculando estatísticas para ${features.length} features...`);
+          
+          const wsField = fldIndex.WS[height];
+          const powerField = fldIndex.POWER[height];
+          
+          console.log(`📋 Campos: WS=${wsField}, POWER=${powerField}`);
+          
+          let values = [];
+          features.forEach((feature, index) => {
+            let value = null;
+            const attrs = feature.attributes;
+            
+            if (metric === 'potencia') {
+              // Tentar campo de potência primeiro
+              if (powerField && attrs[powerField] != null) {
+                value = Number(attrs[powerField]);
+              } else if (wsField && attrs[wsField] != null) {
+                // Calcular potência a partir da velocidade
+                const ws = Number(attrs[wsField]);
+                if (!isNaN(ws) && ws > 0) {
+                  value = 0.5 * 1.225 * Math.pow(ws, 3);
+                }
+              }
+            } else {
+              // Métrica de velocidade
+              if (wsField && attrs[wsField] != null) {
+                value = Number(attrs[wsField]);
+              }
+            }
+            
+            if (value !== null && !isNaN(value) && value > 0) {
+              values.push(value);
+            }
+            
+            // Debug dos primeiros 3 registros
+            if (index < 3) {
+              console.log(`  Feature ${index}: ${wsField}=${attrs[wsField]}, ${powerField}=${attrs[powerField]}, value=${value}`);
+            }
+          });
+
+          console.log(`📊 ${values.length} valores válidos encontrados de ${features.length} features`);
+
+          if (values.length === 0) {
+            console.log("❌ Nenhum valor válido encontrado");
+            return null;
+          }
+
+          values.sort((a, b) => a - b);
+          const stats = {
+            count: values.length,
+            min: values[0],
+            max: values[values.length - 1],
+            mean: values.reduce((a, b) => a + b) / values.length,
+            median: values[Math.floor(values.length / 2)],
+            unit: metric === 'potencia' ? 'W/m²' : 'm/s'
+          };
+          
+          console.log(`✅ Estatísticas calculadas:`, stats);
+          return stats;
+        }
+
+        function displayRegionDashboard(stats, boundaryAttrs, maritimeType) {
+          if (!stats) {
+            showError("Não foi possível calcular estatísticas para esta região");
+            return;
+          }
+
+          // Identificar nome da região usando os campos das camadas EPE
+          const estadoSigla = boundaryAttrs.Name || boundaryAttrs.name || 
+                           boundaryAttrs.ESTADO || boundaryAttrs.UF || boundaryAttrs.estado || 
+                           boundaryAttrs.nome_estad || boundaryAttrs.NOME || 
+                           boundaryAttrs.Estado || boundaryAttrs.NM_ESTADO ||
+                           boundaryAttrs.SIGLA_UF || boundaryAttrs.CD_GEOCUF || 'Região Offshore';
+          
+          // Converter sigla para nome completo
+          const regionName = estadosMap[estadoSigla] || estadoSigla;
+          
+          console.log('🏛️ Atributos da região EPE:', boundaryAttrs);
+          console.log('🗺️ Estado sigla:', estadoSigla);
+          console.log('🗺️ Nome completo:', regionName);
+          
+          // Atualizar informações do painel com dados regionais
+          const latlonEl = document.getElementById('latlon');
+          const heightFieldEl = document.getElementById('height_field');
+          if(latlonEl) latlonEl.innerText = `${regionName}`;
+          if(heightFieldEl) heightFieldEl.innerText = `${state.height}m (${maritimeType} milhas)`;
+          
+          // Mostrar velocidade média e potência média
+          if (state.metric === 'potencia') {
+            const meanWindEl = document.getElementById('mean_wind');
+            const powerDensityEl = document.getElementById('power_density');
+            if(meanWindEl) meanWindEl.innerText = `${stats.mean.toFixed(1)} ${stats.unit} (média)`;
+            if(powerDensityEl) powerDensityEl.innerText = `${stats.count} pontos na região`;
+          } else {
+            const meanWindEl = document.getElementById('mean_wind');
+            const powerDensityEl = document.getElementById('power_density');
+            if(meanWindEl) meanWindEl.innerText = `${stats.mean.toFixed(2)} ${stats.unit} (média)`;
+            // Calcular potência a partir da velocidade média
+            const avgPower = 0.5 * 1.225 * Math.pow(stats.mean, 3);
+            if(powerDensityEl) powerDensityEl.innerText = `${avgPower.toFixed(1)} W/m² (estimado)`;
+          }
+
+          console.log(`📈 Dashboard atualizado para ${regionName} (${maritimeType} milhas):`, stats);
+          
+          // Tentar renderizar gráficos se possível
+          setTimeout(() => {
+            try {
+              // Weibull usando a função existente
+              drawWeibullChartPDF(2.0, stats.mean); // k=2.0 (típico), c=velocidade média
+              
+              // Rosa dos ventos mock usando função existente
+              if (!hasRose) {
+                const mockLabels = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+                const mockValues = mockLabels.map(() => Math.random() * 20 + 5);
+                drawWindRosePolar(mockLabels, mockValues);
+              }
+            } catch(e) {
+              console.log("Gráficos não disponíveis:", e);
+            }
+          }, 100);
+        }
+
+        const thermoTitle=document.getElementById('thermoTitle');
+        const thermoFill=document.getElementById('thermoFill');
+        const thermoValue=document.getElementById('thermoValue');
+        function updateThermo(val){
+          const r=(windCompleteFL.featureReduction && windCompleteFL.featureReduction.renderer) || windCompleteFL.renderer;
+          const max=rendererMax(r)||1;
+          const pct=Math.max(0,Math.min(100,(val/max)*100));
+          thermoFill.style.height=pct.toFixed(1)+'%';
+          thermoValue.textContent=state.metric==='potencia'?`${val.toFixed(0)} W/m²`:`${val.toFixed(2)} m/s`;
+          thermoTitle.textContent=(state.metric==='potencia'?'Potência ':'Velocidade ')+state.height+' m';
+        }
+        view.on("pointer-move",(evt)=>{
+          const wsField=fldIndex.WS[state.height]||null, powerField=fldIndex.POWER[state.height]||null;
+          const isPow=(state.metric==='potencia');
+          const field=isPow?(powerField||wsField):wsField;
+          if(!field) return;
+          view.hitTest(evt).then((res)=>{
+            const item=res.results?.find(r=>r.graphic?.layer?.url===windCompleteURL) || res.results?.[0];
+            const g=item?.graphic; if(!g) return;
+            let val=g.attributes?.[field]; if(val==null) return; val=Number(val);
+            if(isPow && !powerField && wsField){ val=0.5*1.225*Math.pow(val,3); }
+            if(!isNaN(val)) updateThermo(val);
+          });
+        });
+
+        // ======== CONSULTA E DESENHO DOS GRÁFICOS REAIS ========
+        function refreshChartsAt(mapPoint){
+          // Mostrar painel
+          const panel = document.getElementById('panel');
+          if(panel) panel.hidden=false;
+          const coords=mapPoint.latitude.toFixed(3)+", "+mapPoint.longitude.toFixed(3);
+          const latlonEl = document.getElementById('latlon');
+          if(latlonEl) latlonEl.innerText=coords;
+          const heightEl = document.getElementById('height_field');
+          if(heightEl) heightEl.innerText=state.height+' m';
+
+          // 1) Busca base para média/potência
+          const qBase={geometry:mapPoint,distance:50000,units:"meters",returnGeometry:true,outFields:["*"],num:1};
+          windCompleteFL.queryFeatures(qBase).then(res=>{
+            const f=res.features?.[0];
+            if(!f){ showError("Nenhum dado encontrado neste local."); return; }
+            lastClickData={mapPoint};
+            const attrs=f.attributes;
+            const wsField=fldIndex.WS[state.height]||null;
+            const powerField=fldIndex.POWER[state.height]||null;
+            let mean=null, power=null;
+            if(wsField && attrs[wsField]!=null) mean=Number(attrs[wsField]);
+            if(powerField && attrs[powerField]!=null) power=Number(attrs[powerField]);
+            else if(mean!=null) power=0.5*1.225*Math.pow(mean,3);
+
+            document.getElementById('mean_wind').innerText=(mean!=null && !isNaN(mean))?mean.toFixed(2)+" m/s":'n/a';
+            document.getElementById('power_density').innerText=(power!=null && !isNaN(power))?power.toFixed(1)+" W/m²":'n/a';
+
+          }).catch(e=>{ console.error(e); });
+
+          // 2) Weibull (k/c por ponto)
+          const qWeib={geometry:mapPoint,distance:50000,units:"meters",returnGeometry:false,outFields:["*"],num:1};
+          weibullFL.queryFeatures(qWeib).then(res=>{
+            const f=res.features?.[0];
+            if(!f){ drawWeibullFallback(); return; }
+            const {k,c} = resolveWeibullKC(f.attributes, state.height);
+            if(isFinite(k) && k>0 && isFinite(c) && c>0){
+              drawWeibullChartPDF(k,c);
+            }else{
+              // Se o layer trouxer bins prontos (ex.: v0..vN e pct0..pctN), tenta detectar
+              const attrs=f.attributes, fields=Object.keys(attrs);
+              const vFields=fields.filter(n=>/^v\d+(_\d+)?$/i.test(n)).sort((a,b)=>+a.match(/\d+/)-+b.match(/\d+/));
+              const pFields=fields.filter(n=>/^pct\d+(_\d+)?$/i.test(n)).sort((a,b)=>+a.match(/\d+/)-+b.match(/\d+/));
+              if(vFields.length && pFields.length && vFields.length===pFields.length){
+                const labels=vFields.map(n=>attrs[n]);
+                const pct=pFields.map(n=>attrs[n]);
+                const ctx=document.getElementById('weibullChart').getContext('2d');
+                destroyChart(weibullChart);
+                weibullChart=new Chart(ctx,{type:'line',data:{labels:labels,datasets:[{label:'Probabilidade (%)',data:pct,borderColor:'#667eea',backgroundColor:'rgba(102,126,234,0.12)',fill:true,tension:0.35}]},
+                  options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{y:{beginAtZero:true}}}});
+              }else{
+                drawWeibullFallback();
+              }
+            }
+          }).catch(e=>{ console.error(e); drawWeibullFallback(); });
+
+          // 3) Rosa dos Ventos (16 setores)
+          if(hasRose && windRoseFL){
+            const qRose={geometry:mapPoint,distance:50000,units:"meters",returnGeometry:false,outFields:["*"],num:1};
+            windRoseFL.queryFeatures(qRose).then(res=>{
+              const f=res.features?.[0];
+              if(!f){ drawWindRoseFallback(); return; }
+              const vals = resolveRoseFields(f.attributes, state.height);
+              const labels = ROSE_SECTORS.slice();
+              const data = labels.map(d=> {
+                const v=vals[d];
+                return (v==null||isNaN(v))?0:Number(v);
+              });
+              // normaliza para % se parecer frequência absoluta
+              const sum = data.reduce((a,b)=>a+b,0);
+              const maxVal = Math.max(...data);
+              let finalData = data;
+              if(sum>0 && maxVal>1.0){ // heurística: se números parecem contagens
+                finalData = data.map(v=> (v/sum)*100 );
+              }
+              drawWindRosePolar(labels, finalData);
+            }).catch(e=>{ console.warn("Rosa dos Ventos indisponível:",e); drawWindRoseFallback(); });
+          }else{
+            drawWindRoseFallback();
+          }
+
+          // 4) Perfil horário
+          const qH={geometry:mapPoint,distance:50000,units:"meters",returnGeometry:false,outFields:["*"],num:1};
+          hourlyFL.queryFeatures(qH).then(res=>{
+            const f=res.features?.[0];
+            if(!f){ drawHourly(Array(24).fill(null)); return; }
+            const attrs=f.attributes, fields=Object.keys(attrs);
+            const H=state.height;
+            // procura h00..h23 (com ou sem sufixo)
+            const getHourVal=(i)=>{
+              const hh=i.toString().padStart(2,'0');
+              const candidates=[`h${hh}_${H}`,`h${hh}${H}`,`h${hh}_${H}m`,`h${hh}${H}m`, `h${hh}`];
+              for(const c of candidates){ if(attrs[c]!=null) return Number(attrs[c]); }
+              // alternativa: hour00
+              const c2=[`hour${hh}_${H}`,`hour${hh}`,`H${hh}_${H}`];
+              for(const c of c2){ if(attrs[c]!=null) return Number(attrs[c]); }
+              return null;
+            };
+            const arr = Array.from({length:24},(_,i)=>getHourVal(i));
+            drawHourly(arr);
+          }).catch(e=>{ console.error(e); drawHourly(Array(24).fill(null)); });
+
+          // 5) Perfil mensal
+          const qM={geometry:mapPoint,distance:50000,units:"meters",returnGeometry:false,outFields:["*"],num:1};
+          monthlyFL.queryFeatures(qM).then(res=>{
+            const f=res.features?.[0];
+            if(!f){ drawMonthly(Array(12).fill(null)); return; }
+            const attrs=f.attributes;
+            const H=state.height;
+            const getMonthVal=(idx)=>{
+              const mm=(idx+1).toString().padStart(2,'0');
+              const cand=[`m${mm}_${H}`,`m${mm}${H}`,`m${mm}`,`month${mm}_${H}`,`month${mm}`];
+              for(const c of cand){ if(attrs[c]!=null) return Number(attrs[c]); }
+              return null;
+            };
+            const arr = Array.from({length:12},(_,i)=>getMonthVal(i));
+            drawMonthly(arr);
+          }).catch(e=>{ console.error(e); drawMonthly(Array(12).fill(null)); });
+        }
+
+        // Clique do usuário
+        view.on("click",function(evt){
+          // Sempre esconder erro anterior ao clicar
+          hideError();
+          
+          // Se uma malha marítima está ativa, priorizar clique na malha
+          if (state.maritime && maritimeBoundaries[state.maritime] && maritimeBoundaries[state.maritime].visible) {
+            handleMaritimeClick(evt, state.maritime);
+          } else {
+            // Comportamento padrão: consultar ponto individual
+            refreshChartsAt(evt.mapPoint);
+          }
+        });
+
+        // ========== GERENCIAMENTO DINÂMICO DO PAINEL ==========
+        
+        // Sistema de controle de estado do painel
+        let panelState = {
+          isOpen: false,
+          widgets: null
+        };
+
+        // Função para alternar estado do painel
+        function togglePanel() {
+          const panel = document.getElementById('control-panel');
+          const closeBtn = document.getElementById('close-panel');
+          const body = document.body;
+          
+          if (panelState.isOpen) {
+            // Fechar painel
+            panel.style.transform = 'translateX(100%)';
+            closeBtn.style.opacity = '0';
+            closeBtn.style.pointerEvents = 'none';
+            body.classList.remove('panel-open');
+            panelState.isOpen = false;
+            console.log('Painel fechado');
+          } else {
+            // Abrir painel
+            panel.style.transform = 'translateX(0)';
+            closeBtn.style.opacity = '1';
+            closeBtn.style.pointerEvents = 'all';
+            body.classList.add('panel-open');
+            panelState.isOpen = true;
+            console.log('Painel aberto');
+          }
+        }
+
+        // Configurar controles do painel após DOM estar pronto
+        setTimeout(() => {
+          // Botão de fechar painel
+          const closeBtn = document.getElementById('close-panel');
+          if (closeBtn) {
+            closeBtn.addEventListener('click', togglePanel);
+            console.log('Botão fechar configurado');
+          }
+
+          // Termômetro abre o painel
+          const thermometer = document.getElementById('thermometer');
+          if (thermometer) {
+            thermometer.addEventListener('click', () => {
+              if (!panelState.isOpen) {
+                togglePanel();
+              }
+            });
+            thermometer.style.cursor = 'pointer';
+            thermometer.title = 'Clique para abrir painel de controles';
+            console.log('Termômetro configurado como trigger');
+          }
+
+          // Configurar botões de zoom personalizados
+          const zoomInBtn = document.getElementById('zoomInBtn');
+          const zoomOutBtn = document.getElementById('zoomOutBtn');
+          
+          if (zoomInBtn && view) {
+            zoomInBtn.addEventListener('click', () => {
+              view.zoom = view.zoom + 1;
+            });
+          }
+          
+          if (zoomOutBtn && view) {
+            zoomOutBtn.addEventListener('click', () => {
+              view.zoom = view.zoom - 1;
+            });
+          }
+
+          // Inicializar painel fechado
+          const panel = document.getElementById('control-panel');
+          if (panel) {
+            panel.style.transform = 'translateX(100%)';
+            document.body.classList.remove('panel-open');
+            panelState.isOpen = false;
+            console.log('Painel inicializado fechado');
+          }
+        }, 100);
+
+      }).catch((e)=>{ console.error("❌ Falha geral:",e); showError("Falha ao carregar camadas: "+e.message); });
+
+    }catch(error){
+      console.error("❌ Erro geral:",error);
+      showError("Erro ao inicializar a aplicação: "+error.message);
+    }
+  }, function(err){
+    console.error("❌ Falha ao carregar ArcGIS JS API:", err);
+    showError("Falha ao carregar ArcGIS JS API: "+err);
+  });
+})();
+</script>
+</body>
+</html>
